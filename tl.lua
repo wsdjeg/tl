@@ -2053,6 +2053,35 @@ local function parse_enum_body(ps, i, def, node)
    return i, node
 end
 
+local function add_function_to_record(rtype, fn_type, field_name)
+   rtype.fields = rtype.fields or {}
+   rtype.field_order = rtype.field_order or {}
+
+   if not rtype.fields[field_name] then
+      rtype.fields[field_name] = fn_type
+      table.insert(rtype.field_order, field_name)
+   else
+      local prev_t = rtype.fields[field_name]
+      if fn_type.typename == "function" and prev_t.typename == "function" then
+         local poly_type = a_type({
+            typename = "poly",
+            filename = prev_t.filename,
+            y = prev_t.y,
+            x = prev_t.x,
+            tk = prev_t.tk,
+         })
+         rtype.fields[field_name] = poly_type
+         rtype.fields[field_name].types = { prev_t, fn_type }
+      elseif fn_type.typename == "function" and prev_t.typename == "poly" then
+         table.insert(prev_t.types, fn_type)
+      else
+         return false
+      end
+   end
+
+   return true
+end
+
 local function parse_record_body(ps, i, def, node)
    def.fields = {}
    def.field_order = {}
@@ -2121,19 +2150,17 @@ local function parse_record_body(ps, i, def, node)
             end
 
             local field_name = v.conststr or v.tk
-            if not def.fields[field_name] then
+
+            if t.typename == "function" then
+               local ok = add_function_to_record(def, t, field_name)
+               if not ok then
+                  return fail(ps, i, "attempt to redeclare field '" .. field_name .. "' (only functions can be overloaded)")
+               end
+            elseif not def.fields[field_name] then
                def.fields[field_name] = t
                table.insert(def.field_order, field_name)
             else
-               local prev_t = def.fields[field_name]
-               if t.typename == "function" and prev_t.typename == "function" then
-                  def.fields[field_name] = new_type(ps, iv, "poly")
-                  def.fields[field_name].types = { prev_t, t }
-               elseif t.typename == "function" and prev_t.typename == "poly" then
-                  table.insert(prev_t.types, t)
-               else
-                  return fail(ps, i, "attempt to redeclare field '" .. field_name .. "' (only functions can be overloaded)")
-               end
+               return fail(ps, i, "attempt to redeclare field '" .. field_name .. "' (only functions can be overloaded)")
             end
          elseif ps.tokens[i].tk == "=" then
             local next_word = ps.tokens[i + 1].tk
@@ -6807,10 +6834,7 @@ tl.type_check = function(ast, opts)
                end
 
                if ok then
-                  rtype.fields = rtype.fields or {}
-                  rtype.field_order = rtype.field_order or {}
-                  rtype.fields[node.name.tk] = fn_type
-                  table.insert(rtype.field_order, node.name.tk)
+                  add_function_to_record(rtype, fn_type, node.name.tk)
                else
                   local name = tl.pretty_print_ast(node.fn_owner, { preserve_indent = true, preserve_newlines = false })
                   node_error(node, "cannot add undeclared function '" .. node.name.tk .. "' outside of the scope where '" .. name .. "' was originally declared")
