@@ -6322,8 +6322,10 @@ show_type(var.t))
       ["local_type"] = {
          before = function(node)
             add_var(node.var, node.var.tk, node.value.newtype, node.var.is_const)
+            begin_scope()
          end,
          after = function(node, _children)
+            end_scope()
             dismiss_unresolved(node.var.tk)
             node.type = NONE
          end,
@@ -6331,8 +6333,10 @@ show_type(var.t))
       ["global_type"] = {
          before = function(node)
             add_global(node.var, node.var.tk, node.value.newtype, node.var.is_const)
+            begin_scope()
          end,
          after = function(node, _children)
+            end_scope()
             local existing, existing_is_const = find_global(node.var.tk)
             local var = node.var
             if existing then

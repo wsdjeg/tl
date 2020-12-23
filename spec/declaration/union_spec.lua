@@ -44,6 +44,30 @@ describe("union declaration", function()
       u = { "world" }
    ]])
 
+   it("type arguments across declarations don't get mixed up", util.check [[
+      local function map<A,B>(t: {A}, f: function(A):(B)): {B}
+          local r = {}
+          for i, v in ipairs(t) do
+              r[i] = f(v)
+          end
+          return r
+      end
+
+      local function f(a: number, b: number) : number
+          return a * (b or 2)
+      end
+
+      local type UnaryFn<A, B> = function(A): B
+
+      local type _MyRec<A> = record
+         x: A
+      end
+
+      local type _Union<A, B> = A | B
+
+      print(map({1,2,3}, f as UnaryFn<number, number>)[2])
+   ]])
+
    it("unions can use type arguments, but not break union restrictions", util.check_type_error([[
       local type U<A, B> = A | B
 
