@@ -1716,6 +1716,16 @@ do
    end
 end
 
+local function parse_type_name(ps, i)
+   local node
+   i, node = verify_kind(ps, i, "identifier")
+   if not node then
+      return i
+   end
+   node.is_const = true
+   return i, node
+end
+
 local function parse_variable_name(ps, i)
    local is_const = false
    local node
@@ -2256,14 +2266,28 @@ local function parse_type_declaration(ps, i, node_name)
    i = i + 2
 
    local asgn = new_node(ps.tokens, i, node_name)
-   i, asgn.var = parse_variable_name(ps, i)
+   i, asgn.var = parse_type_name(ps, i)
    if not asgn.var then
       return fail(ps, i, "expected a type name")
+   end
+   local typeargs
+   if ps.tokens[i].tk == "<" then
+      i, typeargs = parse_typearg_list(ps, i)
+      if not typeargs then
+         return i
+      end
    end
    i = verify_tk(ps, i, "=")
    i, asgn.value = parse_newtype(ps, i)
    if not asgn.value then
       return i
+   end
+   if typeargs then
+      if asgn.value.newtype.def.typeargs then
+         return fail(ps, i, "type arguments declared twice, both in type name and type constructor")
+      else
+         asgn.value.newtype.def.typeargs = typeargs
+      end
    end
    if not asgn.value.newtype.def.names then
       asgn.value.newtype.def.names = { asgn.var.tk }
@@ -5761,6 +5785,13 @@ show_type(var.t))
 
       if not resolved then
          resolved = a_type({ typename = "bad_nominal", names = t.names })
+      end
+
+      if resolved.typename == "union" then
+         local ok, err = is_valid_union(resolved)
+         if not ok then
+            type_error(t, err, t)
+         end
       end
 
       if not t.filename then

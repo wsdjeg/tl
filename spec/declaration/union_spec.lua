@@ -37,6 +37,40 @@ describe("union declaration", function()
       local params3: {string:P3} = { key1 = 'val2', key2 = {'val2', 'val3'}}
    ]])
 
+   it("unions can use type arguments", util.check [[
+      local type U<A, B> = A | B
+
+      local u: U<string, {string}> = "hello"
+      u = { "world" }
+   ]])
+
+   it("unions can use type arguments, but not break union restrictions", util.check_type_error([[
+      local type U<A, B> = A | B
+
+      local u: U<{number}, {string:boolean}> = {}
+   ]], {
+      { msg = "cannot discriminate a union between multiple table types" },
+   }))
+
+   it("unions can use type arguments, but not break union restrictions, even in nested types", util.check_type_error([[
+      local type U<A, B> = A | B
+      local type V<X, Y> = X | Y
+
+      local u: U<number, V<{number}, {string:boolean}> > = {}
+   ]], {
+      { msg = "cannot discriminate a union between multiple table types" },
+   }))
+
+   -- this is failing with a stack overflow!
+   pending("unions can use type arguments, but not break union restrictions, even in nested types", util.check_type_error([[
+      local type U<A, B> = A | B
+      local type V<A, B> = A | B
+
+      local u: U<number, V<{number}, {string:boolean}> > = {}
+   ]], {
+      { msg = "cannot discriminate a union between multiple table types" },
+   }))
+
    it("cannot declare a union between multiple table types", util.check_type_error([[
       local t: number | {number} | {string:boolean}
    ]], {
