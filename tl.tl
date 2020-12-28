@@ -2863,16 +2863,19 @@ local spaced_op: {number:{string:boolean}} = {
 local record PrettyPrintOpts
    preserve_indent: boolean
    preserve_newlines: boolean
+   output_comments: boolean
 end
 
 local default_pretty_print_ast_opts: PrettyPrintOpts = {
    preserve_indent = true,
    preserve_newlines = true,
+   output_comments = false,
 }
 
 local fast_pretty_print_ast_opts: PrettyPrintOpts = {
    preserve_indent = false,
    preserve_newlines = true,
+   output_comments = false,
 }
 
 local primitive: {TypeName:string} = {
@@ -2969,7 +2972,33 @@ function tl.pretty_print_ast(ast: Node, mode: boolean | PrettyPrintOpts): string
       return table.concat(out)
    end
 
+   local function comment_to_output(comment: Comment): Output
+      local text = comment.text
+      local h = 0
+      for _nl in text:gmatch("\n") do
+         h = h + 1
+      end
+      return { y = comment.y, h = h, text }
+   end
+
    local visit_node: Visitor<NodeKind, Node, Output> = {}
+
+   if opts.output_comments then
+      visit_node.after = {
+         after = function(node: Node, _children: {Output}, ret: Output): Output
+            if node.comment_after then
+               local out = comment_to_output(node.comment_after)
+               add_child(ret, out, " ", indent)
+            end
+            if node.comment_before then
+               local code = ret
+               ret = comment_to_output(node.comment_before)
+               add_child(ret, code, nil, indent)
+            end
+            return ret
+         end,
+      }
+   end
 
    visit_node.cbs = {
       ["statements"] = {
