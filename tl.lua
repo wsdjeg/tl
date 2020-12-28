@@ -103,7 +103,15 @@ local TokenKind = {}
 
 
 
+local Comment = {}
+
+
+
+
+
+
 local Token = {}
+
 
 
 
@@ -269,6 +277,11 @@ function tl.lex(input)
    local ti
    local in_token = false
 
+   local cx
+   local cy
+   local ci
+   local comment
+
    local function begin_token()
       tx = x
       ty = y
@@ -287,11 +300,37 @@ function tl.lex(input)
          i = ti,
          tk = tk,
          kind = kind,
+         comment = comment,
       })
+      comment = nil
       in_token = false
    end
 
    local function drop_token()
+      in_token = false
+   end
+
+   local function begin_comment(open_len)
+      if comment then
+         cx = comment.x
+         cy = comment.y
+         ci = comment.i
+         comment = nil
+      else
+         cx = x - open_len
+         cy = y
+         ci = i - open_len
+      end
+      in_token = false
+   end
+
+   local function end_comment(last)
+      comment = {
+         x = cx,
+         y = cy,
+         i = ci,
+         text = input:sub(ci, last or i) or "",
+      }
       in_token = false
    end
 
@@ -396,17 +435,18 @@ function tl.lex(input)
          else
             fwd = false
             state = "comment"
-            drop_token()
+            begin_comment(2)
          end
       elseif state == "maybelongcomment" then
          if c == "[" then
             state = "longcomment"
+            begin_comment(3 + lc_open_lvl)
          elseif c == "=" then
             lc_open_lvl = lc_open_lvl + 1
          else
             fwd = false
             state = "comment"
-            drop_token()
+            begin_comment(3 + lc_open_lvl)
             lc_open_lvl = 0
          end
       elseif state == "longcomment" then
@@ -415,7 +455,7 @@ function tl.lex(input)
          end
       elseif state == "maybelongcommentend" then
          if c == "]" and lc_close_lvl == lc_open_lvl then
-            drop_token()
+            end_comment()
             state = "any"
             lc_open_lvl = 0
             lc_close_lvl = 0
@@ -552,6 +592,7 @@ function tl.lex(input)
          end
       elseif state == "comment" then
          if c == "\n" then
+            end_comment(i - 1)
             state = "any"
          end
       elseif state == "identifier" then
