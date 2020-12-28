@@ -892,6 +892,7 @@ local record Type
    field_order: {string}
    meta_fields: {string: Type}
    meta_field_order: {string}
+   comment_fields: {string: Comment}
 
    -- array
    elements: Type
@@ -1014,6 +1015,9 @@ local record Node
    tk: string
    kind: NodeKind
 
+   comment_before: Comment
+   comment_after: Comment
+
    yend: number
 
    facts: {Fact}
@@ -1129,6 +1133,20 @@ local function verify_tk(ps: ParseState, i: number, tk: string): number
    return fail(ps, i, "syntax error, expected '" .. tk .. "'")
 end
 
+local function consume_comment(ps: ParseState, i: number): Comment
+   if ps.tokens[i].comment then
+      local comment = ps.tokens[i].comment
+      ps.tokens[i].comment = nil
+      return comment
+   end
+end
+
+local function consume_comment_after(ps: ParseState, i: number, item: Node): Comment
+   if ps.tokens[i].comment and ps.tokens[i].comment.y == item.y then
+      return consume_comment(ps, i)
+   end
+end
+
 local function new_node(tokens: {Token}, i: number, kind: NodeKind): Node
    local t = tokens[i]
    return { y = t.y, x = t.x, tk = t.tk, kind = kind or t.kind }
@@ -1191,6 +1209,7 @@ end
 
 local function parse_table_item(ps: ParseState, i: number, n: number): number, Node, number
    local node = new_node(ps.tokens, i, "table_item")
+   node.comment_before = consume_comment(ps, i)
    if ps.tokens[i].kind == "$EOF$" then
       return fail(ps, i)
    end
@@ -2080,6 +2099,11 @@ local function parse_return(ps: ParseState, i: number): number, Node
 end
 
 local function store_field_in_record(ps: ParseState, i: number, field_name: string, t: Type, fields: {string: Type}, field_order: {string}): boolean
+   local comment = consume_comment(ps, i)
+   if comment then
+      t.comment_fields = t.comment_fields or {}
+      t.comment_fields[field_name] = comment
+   end
    if not fields[field_name] then
       fields[field_name] = t
       table.insert(field_order, field_name)
@@ -2128,6 +2152,8 @@ parse_enum_body = function(ps: ParseState, i: number, def: Type, node: Node): nu
       local item: Node
       i, item = verify_kind(ps, i, "string", "enum_item")
       if item then
+         item.comment_before = consume_comment(ps, i - 1)
+         item.comment_after = consume_comment_after(ps, i, item)
          table.insert(node, item)
          def.enumset[unquote(item.tk)] = true
       end
@@ -2169,6 +2195,7 @@ parse_record_body = function(ps: ParseState, i: number, def: Type, node: Node): 
       i, def.typeargs = parse_typearg_list(ps, i)
    end
    while not ((not ps.tokens[i]) or ps.tokens[i].tk == "end") do
+      -- consume_comment(ps, i) -- FIXME fields are not Node objects, nowhere to store comments
       if ps.tokens[i].tk == "{" then
          if def.typename == "arrayrecord" then
             return fail(ps, i, "duplicated declaration of array element type in record")
@@ -2449,6 +2476,7 @@ end
 
 parse_statements = function(ps: ParseState, i: number, filename: string, toplevel: boolean): number, Node
    local node = new_node(ps.tokens, i, "statements")
+   -- local istart = i
    while true do
       while ps.tokens[i].kind == ";" do
          i = i + 1
@@ -2460,7 +2488,15 @@ parse_statements = function(ps: ParseState, i: number, filename: string, topleve
          break
       end
       local item: Node
+      local comment_before: Comment
+      local comment_after: Comment
+      comment_before = consume_comment(ps, i)
       i, item = parse_statement(ps, i)
+      comment_after = consume_comment_after(ps, i, item)
+      if item then
+         item.comment_before = comment_before
+         item.comment_after = comment_after
+      end
       if filename then
          for j = 1, #ps.errs do
             if not ps.errs[j].filename then
@@ -2473,6 +2509,12 @@ parse_statements = function(ps: ParseState, i: number, filename: string, topleve
       end
       table.insert(node, item)
    end
+   -- for n = istart, i-1 do
+   --    local c = ps.tokens[n].comment
+   --    if c then
+   --       print("UNCONSUMED COMMENT AT ", ps.tokens[n].tk, c.y, c.x, c.text)
+   --    end
+   -- end
    return i, node
 end
 

@@ -939,6 +939,7 @@ local Type = {}
 
 
 
+
 local Operator = {}
 
 
@@ -1078,6 +1079,9 @@ local Node = {}
 
 
 
+
+
+
 local function is_array_type(t)
    return t.typename == "array" or t.typename == "arrayrecord"
 end
@@ -1127,6 +1131,20 @@ local function verify_tk(ps, i, tk)
       return i + 1
    end
    return fail(ps, i, "syntax error, expected '" .. tk .. "'")
+end
+
+local function consume_comment(ps, i)
+   if ps.tokens[i].comment then
+      local comment = ps.tokens[i].comment
+      ps.tokens[i].comment = nil
+      return comment
+   end
+end
+
+local function consume_comment_after(ps, i, item)
+   if ps.tokens[i].comment and ps.tokens[i].comment.y == item.y then
+      return consume_comment(ps, i)
+   end
 end
 
 local function new_node(tokens, i, kind)
@@ -1191,6 +1209,7 @@ end
 
 local function parse_table_item(ps, i, n)
    local node = new_node(ps.tokens, i, "table_item")
+   node.comment_before = consume_comment(ps, i)
    if ps.tokens[i].kind == "$EOF$" then
       return fail(ps, i)
    end
@@ -2080,6 +2099,11 @@ local function parse_return(ps, i)
 end
 
 local function store_field_in_record(ps, i, field_name, t, fields, field_order)
+   local comment = consume_comment(ps, i)
+   if comment then
+      t.comment_fields = t.comment_fields or {}
+      t.comment_fields[field_name] = comment
+   end
    if not fields[field_name] then
       fields[field_name] = t
       table.insert(field_order, field_name)
@@ -2128,6 +2152,8 @@ parse_enum_body = function(ps, i, def, node)
       local item
       i, item = verify_kind(ps, i, "string", "enum_item")
       if item then
+         item.comment_before = consume_comment(ps, i - 1)
+         item.comment_after = consume_comment_after(ps, i, item)
          table.insert(node, item)
          def.enumset[unquote(item.tk)] = true
       end
@@ -2169,6 +2195,7 @@ parse_record_body = function(ps, i, def, node)
       i, def.typeargs = parse_typearg_list(ps, i)
    end
    while not ((not ps.tokens[i]) or ps.tokens[i].tk == "end") do
+
       if ps.tokens[i].tk == "{" then
          if def.typename == "arrayrecord" then
             return fail(ps, i, "duplicated declaration of array element type in record")
@@ -2449,6 +2476,7 @@ end
 
 parse_statements = function(ps, i, filename, toplevel)
    local node = new_node(ps.tokens, i, "statements")
+
    while true do
       while ps.tokens[i].kind == ";" do
          i = i + 1
@@ -2460,7 +2488,15 @@ parse_statements = function(ps, i, filename, toplevel)
          break
       end
       local item
+      local comment_before
+      local comment_after
+      comment_before = consume_comment(ps, i)
       i, item = parse_statement(ps, i)
+      comment_after = consume_comment_after(ps, i, item)
+      if item then
+         item.comment_before = comment_before
+         item.comment_after = comment_after
+      end
       if filename then
          for j = 1, #ps.errs do
             if not ps.errs[j].filename then
@@ -2473,6 +2509,12 @@ parse_statements = function(ps, i, filename, toplevel)
       end
       table.insert(node, item)
    end
+
+
+
+
+
+
    return i, node
 end
 
