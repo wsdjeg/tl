@@ -47,11 +47,43 @@ local record tl
       msg: string
       filename: string
    end
+
+   enum TokenKind
+      "keyword"
+      "op"
+      "string"
+      "[" "]" "(" ")" "{" "}" "," ":" "#" "`" "." ";"
+      "::"
+      "..."
+      "identifier"
+      "number"
+      "$invalid$"
+      "$EOF$"
+   end
+
+   record Comment
+      x: number
+      y: number
+      i: number
+      text: string
+   end
+
+   record Token
+      x: number
+      y: number
+      i: number
+      tk: string
+      kind: TokenKind
+      comment: Comment
+   end
 end
 
 local Result = tl.Result
 local Env = tl.Env
 local Error = tl.Error
+local TokenKind = tl.TokenKind
+local Comment = tl.Comment
+local Token = tl.Token
 
 --------------------------------------------------------------------------------
 -- Lexer
@@ -89,35 +121,6 @@ local keywords: {string:boolean} = {
 
 --   ["global"] = true,
 }
-
-local enum TokenKind
-   "keyword"
-   "op"
-   "string"
-   "[" "]" "(" ")" "{" "}" "," ":" "#" "`" "." ";"
-   "::"
-   "..."
-   "identifier"
-   "number"
-   "$invalid$"
-   "$EOF$"
-end
-
-local record Comment
-   x: number
-   y: number
-   i: number
-   text: string
-end
-
-local record Token
-   x: number
-   y: number
-   i: number
-   tk: string
-   kind: TokenKind
-   comment: Comment
-end
 
 local lex_word_start: {string:boolean} = {}
 for c = string.byte("a"), string.byte("z") do

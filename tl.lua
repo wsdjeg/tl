@@ -16,7 +16,36 @@ local LoadMode = {}
 
 local LoadFunction = {}
 
-local tl = {Env = {}, Result = {}, Error = {}, }
+local tl = {Env = {}, Result = {}, Error = {}, Comment = {}, Token = {}, }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -52,6 +81,9 @@ local tl = {Env = {}, Result = {}, Error = {}, }
 local Result = tl.Result
 local Env = tl.Env
 local Error = tl.Error
+local TokenKind = tl.TokenKind
+local Comment = tl.Comment
+local Token = tl.Token
 
 
 
@@ -89,35 +121,6 @@ local keywords = {
 
 
 }
-
-local TokenKind = {}
-
-
-
-
-
-
-
-
-
-
-
-
-local Comment = {}
-
-
-
-
-
-
-local Token = {}
-
-
-
-
-
-
-
 
 local lex_word_start = {}
 for c = string.byte("a"), string.byte("z") do
